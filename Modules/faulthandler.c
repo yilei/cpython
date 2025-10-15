@@ -27,6 +27,10 @@
 #  include <sys/auxv.h>           // getauxval()
 #endif
 
+#ifdef __linux__
+#  include <execinfo.h>
+#endif
+
 
 /* Allocate at maximum 100 MiB of the stack to raise the stack overflow */
 #define STACK_OVERFLOW_MAX_SIZE (100 * 1024 * 1024)
@@ -186,6 +190,30 @@ get_thread_state(void)
     return tstate;
 }
 
+#define FAULTHANDLER_MAX_C_FRAMES 50
+
+static void
+faulthandler_dump_c_traceback(int fd)
+{
+#ifdef __linux__
+    PUTS(fd, "\nCurrent thread's C call stack (most recent call first):\n");
+
+    /* We need a buffer to fit the C backtrace. But malloc() isn't safe to call
+    from a signal handler; and we can't use a global buffer because multiple
+    threads could theoretically be crashing at the same time. So we allocate it
+    on the stack. Assuming 64-bit pointers, this would be 400 bytes. SIGSTKSZ
+    is 8192 bytes (on my machine, at least) so 400 shouldn't blow the stack. */
+    void *frames[FAULTHANDLER_MAX_C_FRAMES];
+
+    int n_frames = backtrace(frames, FAULTHANDLER_MAX_C_FRAMES);
+    backtrace_symbols_fd(frames, n_frames, fd);
+
+    if (n_frames == FAULTHANDLER_MAX_C_FRAMES) {
+        PUTS(fd, "<truncated>\n");
+    }
+#endif
+}
+
 static void
 faulthandler_dump_traceback(int fd, int all_threads,
                             PyInterpreterState *interp)
@@ -214,6 +242,8 @@ faulthandler_dump_traceback(int fd, int all_threads,
         if (tstate != NULL)
             _Py_DumpTraceback(fd, tstate);
     }
+
+    faulthandler_dump_c_traceback(fd);
 
     reentrant = 0;
 }
@@ -260,6 +290,9 @@ faulthandler_dump_traceback_py(PyObject *self,
     else {
         _Py_DumpTraceback(fd, tstate);
     }
+
+    faulthandler_dump_c_traceback(fd);
+
     Py_XDECREF(file);
 
     if (PyErr_CheckSignals())
