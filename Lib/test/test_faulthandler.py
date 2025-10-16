@@ -45,6 +45,13 @@ def temporary_filename():
     finally:
         os_helper.unlink(filename)
 
+
+ADDRESS_EXPR = "0x[0-9a-f]+"
+C_STACK_REGEX = [
+    r"Current thread's C stack trace \(most recent call first\):",
+    fr'(  Binary file ".+"(, at .*(\+|-){ADDRESS_EXPR})? \[{ADDRESS_EXPR}\])|(<.+>)'
+]
+
 class FaultHandlerTests(unittest.TestCase):
 
     def get_output(self, code, filename=None, fd=None):
@@ -93,6 +100,7 @@ class FaultHandlerTests(unittest.TestCase):
                     fd=None, know_current_thread=True,
                     py_fatal_error=False,
                     garbage_collecting=False,
+                    c_stack=True,
                     function='<module>'):
         """
         Check that the fault handler for fatal errors is enabled and check the
@@ -115,6 +123,8 @@ class FaultHandlerTests(unittest.TestCase):
         if garbage_collecting:
             regex.append('  Garbage-collecting')
         regex.append(fr'  File "<string>", line {lineno} in {function}')
+        if c_stack:
+            regex.extend(C_STACK_REGEX)
         regex = '\n'.join(regex)
 
         if other_regex:
@@ -598,6 +608,50 @@ class FaultHandlerTests(unittest.TestCase):
     def test_dump_traceback_threads_file(self):
         with temporary_filename() as filename:
             self.check_dump_traceback_threads(filename)
+
+    def check_c_stack(self, *, filename=None, fd=None):
+        """
+        Explicitly call dump_c_stack() function and check its output.
+        Raise an error if the output doesn't match the expected format.
+        """
+        code = """
+            import faulthandler
+
+            filename = {filename!r}
+            fd = {fd}
+
+            def funcB():
+                if filename:
+                    with open(filename, "wb") as fp:
+                        faulthandler.dump_c_stack(fp)
+                elif fd is not None:
+                    faulthandler.dump_c_stack(fd)
+                else:
+                    faulthandler.dump_c_stack()
+
+            def funcA():
+                funcB()
+
+            funcA()
+            """
+        code = code.format(
+            filename=filename,
+            fd=fd,
+        )
+        trace, exitcode = self.get_output(code, filename, fd)
+        trace = '\n'.join(trace)
+        # The C stack trace should contain the header
+        self.assertRegex(trace, r"Current thread's C stack trace \(most recent call first\):")
+        # And at least one frame with an address
+        self.assertRegex(trace, r'\[0x[0-9a-f]+\]')
+        self.assertEqual(exitcode, 0)
+
+    def test_dump_c_stack(self):
+        self.check_c_stack()
+
+    def test_dump_c_stack_file(self):
+        with temporary_filename() as filename:
+            self.check_c_stack(filename=filename)
 
     def check_dump_traceback_later(self, repeat=False, cancel=False, loops=1,
                                    *, filename=None, fd=None):
