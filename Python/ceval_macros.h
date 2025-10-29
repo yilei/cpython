@@ -134,6 +134,7 @@ do { \
 #define GOTO_ERROR(LABEL) goto LABEL
 
 #define CHECK_EVAL_BREAKER() \
+    _Py_gil_stall_counter_inc(2); \
     _Py_CHECK_EMSCRIPTEN_SIGNALS_PERIODICALLY(); \
     QSBR_QUIESCENT_STATE(tstate); \
     if (_Py_atomic_load_uintptr_relaxed(&tstate->eval_breaker) & _PY_EVAL_EVENTS_MASK) { \

@@ -238,6 +238,8 @@ PyAPI_FUNC(PyObject *)_Py_MakeCoro(PyFunctionObject *func);
    and asynchronous exception */
 PyAPI_FUNC(int) _Py_HandlePending(PyThreadState *tstate);
 
+extern void _Py_gil_stall_counter_inc(int);
+
 extern PyObject * _PyEval_GetFrameLocals(void);
 
 typedef PyObject *(*conversion_func)(PyObject *);

@@ -430,6 +430,8 @@ init_runtime(_PyRuntimeState *runtime,
 
     runtime->unicode_state.ids.next_index = unicode_next_index;
 
+    runtime->stall_counter = NULL;
+
 #if defined(__EMSCRIPTEN__) && defined(PY_CALL_TRAMPOLINE)
     _Py_EmscriptenTrampoline_Init(runtime);
 #endif

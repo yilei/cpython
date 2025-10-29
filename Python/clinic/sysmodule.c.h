@@ -1353,6 +1353,36 @@ sys_getandroidapilevel(PyObject *module, PyObject *Py_UNUSED(ignored))
 
 #endif /* defined(ANDROID_API_LEVEL) */
 
+PyDoc_STRVAR(sys__set_stall_counter__doc__,
+"_set_stall_counter($module, ptr, /)\n"
+"--\n"
+"\n"
+"Start instrumenting GIL stalls, so they can be detected by Perpetuo.\n"
+"\n"
+"The integer is treated as a pointer to a unsigned 64-bit value, and arranges that it\n"
+"will be incremented once whenever the GIL is taken or dropped.");
+
+#define SYS__SET_STALL_COUNTER_METHODDEF    \
+    {"_set_stall_counter", (PyCFunction)sys__set_stall_counter, METH_O, sys__set_stall_counter__doc__},
+
+static PyObject *
+sys__set_stall_counter_impl(PyObject *module, unsigned long long ptr);
+
+static PyObject *
+sys__set_stall_counter(PyObject *module, PyObject *arg)
+{
+    PyObject *return_value = NULL;
+    unsigned long long ptr;
+
+    if (!_PyLong_UnsignedLongLong_Converter(arg, &ptr)) {
+        goto exit;
+    }
+    return_value = sys__set_stall_counter_impl(module, ptr);
+
+exit:
+    return return_value;
+}
+
 PyDoc_STRVAR(sys_activate_stack_trampoline__doc__,
 "activate_stack_trampoline($module, backend, /)\n"
 "--\n"
