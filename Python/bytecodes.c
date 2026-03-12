@@ -153,6 +153,7 @@ dummy_func(
         macro(NOT_TAKEN) = NOP;
 
         op(_CHECK_PERIODIC, (--)) {
+            _Py_gil_stall_counter_inc(2);
             _Py_CHECK_EMSCRIPTEN_SIGNALS_PERIODICALLY();
             QSBR_QUIESCENT_STATE(tstate);
             if (_Py_atomic_load_uintptr_relaxed(&tstate->eval_breaker) & _PY_EVAL_EVENTS_MASK) {
@@ -163,6 +164,7 @@ dummy_func(
 
         op(_CHECK_PERIODIC_IF_NOT_YIELD_FROM, (--)) {
             if ((oparg & RESUME_OPARG_LOCATION_MASK) < RESUME_AFTER_YIELD_FROM) {
+                _Py_gil_stall_counter_inc(2);
                 _Py_CHECK_EMSCRIPTEN_SIGNALS_PERIODICALLY();
                 QSBR_QUIESCENT_STATE(tstate);
                 if (_Py_atomic_load_uintptr_relaxed(&tstate->eval_breaker) & _PY_EVAL_EVENTS_MASK) {

@@ -654,6 +654,7 @@ NON_ESCAPING_FUNCTIONS = (
     "_PyUnicode_Equal",
     "_PyUnicode_JoinArray",
     "_Py_CHECK_EMSCRIPTEN_SIGNALS_PERIODICALLY",
+    "_Py_gil_stall_counter_inc",
     "_Py_DECREF_NO_DEALLOC",
     "_Py_ID",
     "_Py_IsImmortal",

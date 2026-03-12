@@ -152,6 +152,17 @@ static void _gil_initialize(struct _gil_runtime_state *gil)
     gil->interval = DEFAULT_INTERVAL;
 }
 
+void
+_Py_gil_stall_counter_inc(int amount) {
+    // Read the pointer once, atomically: on free-threaded builds with the GIL
+    // disabled, this runs concurrently in every thread via _CHECK_PERIODIC, and
+    // sys._set_stall_counter can race with it.
+    uint64_t *counter = _Py_atomic_load_ptr_relaxed(&_PyRuntime.stall_counter);
+    if (counter) {
+        _Py_atomic_add_uint64(counter, (uint64_t)amount);
+    }
+}
+
 static int gil_created(struct _gil_runtime_state *gil)
 {
     if (gil == NULL) {
@@ -245,6 +256,9 @@ drop_gil(PyInterpreterState *interp, PyThreadState *tstate, int final_release)
            holder variable so that our heuristics work. */
         _Py_atomic_store_ptr_relaxed(&gil->last_holder, tstate);
     }
+
+    // before dropping GIL, increment to mark us as idle
+    _Py_gil_stall_counter_inc(1);
 
     drop_gil_impl(tstate, gil);
 
@@ -380,6 +394,8 @@ take_gil(PyThreadState *tstate)
     /* We now hold the GIL */
     _Py_atomic_store_int_relaxed(&gil->locked, 1);
     _Py_ANNOTATE_RWLOCK_ACQUIRED(&gil->locked, /*is_write=*/1);
+    // now that we have the GIL, increment to mark us as active
+    _Py_gil_stall_counter_inc(1);
 
     if (tstate != (PyThreadState*)_Py_atomic_load_ptr_relaxed(&gil->last_holder)) {
         _Py_atomic_store_ptr_relaxed(&gil->last_holder, tstate);
@@ -1180,6 +1196,11 @@ _PyEval_DisableGIL(PyThreadState *tstate)
         //
         // Drop the GIL, which will wake up any threads waiting in take_gil()
         // and let them resume execution without the GIL.
+        // GIL going from enabled->disabled: mark idle before the final drop,
+        // otherwise the perpetuo counter stays odd forever and the watcher
+        // reports a phantom stall. This call site bypasses drop_gil() and
+        // goes straight to drop_gil_impl(), so we must increment here too.
+        _Py_gil_stall_counter_inc(1);
         drop_gil_impl(tstate, gil);
 
         // If another thread asked us to drop the GIL, they should be
